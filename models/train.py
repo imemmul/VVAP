@@ -1,6 +1,9 @@
 from transformers import VideoMAEImageProcessor, VideoMAEForVideoClassification, VivitConfig, VivitForVideoClassification, VivitImageProcessor
 import pytorchvideo.data
 from dataset import read_video_pyav, sample_all_frame_indices
+from transformers import TrainingArguments, Trainer
+import numpy as np
+import evaluate
 import av
 # from pytorchvideo.transforms import (
 #     ApplyTransformToKey,
@@ -70,10 +73,27 @@ video, labels = load_dataset(path)
 # )
 
 
-# vivit_cfg = VivitConfig(image_size=64)
-# model = VivitForVideoClassification(vivit_cfg)
+vivit_cfg = VivitConfig(image_size=64)
+model = VivitForVideoClassification(vivit_cfg)
 for p in video:
     container = av.open(p)
     indices = sample_all_frame_indices(clip_len=container.streams.video[0].frames)
     video = read_video_pyav(container=container, indices=indices)
     print(f"video shape: {video.shape}")
+
+
+metric = evaluate.load("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    return metric.compute(predictions=predictions, references=labels)
+
+
+# training_args = TrainingArguments(output_dir="./test", evaluation_strategy="epoch")
+
+# trainer = Trainer(
+#     model=model,
+#     args=training_args,
+#     train_dataset=small_train_dataset,
+#     compute_metrics=compute_metrics,
+# )
