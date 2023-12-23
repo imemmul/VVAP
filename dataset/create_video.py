@@ -22,25 +22,31 @@ indicators_str = [
     'midpoint', 'wma', 'ema', 'ht_trendline', 'kama', 'sma', 'ma', 'adxr', 'adx', 'trima', 'linearreg_intercept', 'dx'
     ]
 
-def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top_etf, frame_rate=5, num_videos=100):
-    
+def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top_etf, frame_rate=5, frames_per_video=64):
     video_info = {}
     if not os.path.exists(dataset_dir):
         os.makedirs(dataset_dir, exist_ok=True)
-    # for group_idx, (group_frames, group_labels) in enumerate(zip(rgb_frames, rgb_labels)):
-    frames_per_video = len(rgb_frames) // num_videos
-    
+
+
     group_dir = os.path.join(dataset_dir, f"group_{group_idx}")
-    if not os.path.exists(group_dir):
-        os.makedirs(group_dir, exist_ok=True)
-    if not os.path.exists(os.path.join(group_dir, etf_name)):
-        os.makedirs(os.path.join(group_dir, etf_name), exist_ok=True)
+    os.makedirs(group_dir, exist_ok=True)
+    etf_dir = os.path.join(group_dir, etf_name)
+    os.makedirs(etf_dir, exist_ok=True)
+
+    # Calculate the number of videos that can be created
+    num_videos = len(rgb_frames) // frames_per_video
+
     for i in range(num_videos):
         start_idx = i * frames_per_video
-        end_idx = (i + 1) * frames_per_video if i != num_videos - 1 else len(rgb_frames)
+        end_idx = start_idx + frames_per_video
+
+        # Ensure the last video also has 64 frames
+        if end_idx > len(rgb_frames):
+            end_idx = len(rgb_frames)
+            start_idx = end_idx - frames_per_video
 
         video_label = rgb_labels[end_idx - 1, :].tolist()[top_etf]
-        video_filename = os.path.join(group_dir, etf_name, f'output_video_{i+1}.mp4')
+        video_filename = os.path.join(etf_dir, f'output_video_{i+1}.mp4')
 
         with imageio.get_writer(video_filename, fps=frame_rate, format='mp4', codec='libx264') as writer:
             for frame in rgb_frames[start_idx:end_idx]:
@@ -51,11 +57,12 @@ def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top
 
     return video_info
 
-def main(x_etfs, y_etfs, etf_groups):
+def main(x_etfs, y_etfs, etf_groups, test):
     rgb_frames = []
     rgb_labels = []
     video_info = {}
-    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/"
+    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_Video_Test"
+    # dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos"
     print(etf_groups)
     for i in range(len(x_etfs)):
         frame = x_etfs[i].transpose((1, 2, 3, 0))
@@ -76,10 +83,14 @@ def main(x_etfs, y_etfs, etf_groups):
         # print(etf1, etf2, etf3)
         # print(f.shape)
         # print(s.shape)
-
-        info_1 = createRGBVideo(rgb_frames=np.array(f), dataset_dir="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", etf_name=etf1, group_idx=idx, rgb_labels=np.array(labels), top_etf=0)
-        info_2 = createRGBVideo(rgb_frames=np.array(s), dataset_dir="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", etf_name=etf2, group_idx=idx, rgb_labels=np.array(labels), top_etf=1)
-        info_3 = createRGBVideo(rgb_frames=np.array(t), dataset_dir="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", etf_name=etf3, group_idx=idx, rgb_labels=np.array(labels), top_etf=2)
+        if test:
+            info_1 = createRGBVideo(rgb_frames=np.array(f), dataset_dir=dataset_dir, etf_name=etf1, group_idx=idx, rgb_labels=np.array(labels), top_etf=0)
+            info_2 = createRGBVideo(rgb_frames=np.array(s), dataset_dir=dataset_dir, etf_name=etf2, group_idx=idx, rgb_labels=np.array(labels), top_etf=1)
+            info_3 = createRGBVideo(rgb_frames=np.array(t), dataset_dir=dataset_dir, etf_name=etf3, group_idx=idx, rgb_labels=np.array(labels), top_etf=2)
+        else:
+            info_1 = createRGBVideo(rgb_frames=np.array(f), dataset_dir=dataset_dir, etf_name=etf1, group_idx=idx, rgb_labels=np.array(labels), top_etf=0)
+            info_2 = createRGBVideo(rgb_frames=np.array(s), dataset_dir=dataset_dir, etf_name=etf2, group_idx=idx, rgb_labels=np.array(labels), top_etf=1)
+            info_3 = createRGBVideo(rgb_frames=np.array(t), dataset_dir=dataset_dir, etf_name=etf3, group_idx=idx, rgb_labels=np.array(labels), top_etf=2)
         video_info = {**video_info, **info_1, **info_2, **info_3}
     with open(os.path.join(dataset_dir, "labels.txt"), 'w') as file:
         for key, value in video_info.items():
@@ -93,7 +104,8 @@ def main(x_etfs, y_etfs, etf_groups):
         
 
 if __name__ == "__main__":
-    train_data = "/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TrainData"
+    # train_data = "/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TrainData"
+    test_data = "/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TestData"
     x_loaded_etfs = []
     y_loaded_etfs = []
     etf_groups = []
@@ -103,9 +115,9 @@ if __name__ == "__main__":
         temp_l_y = []
         etf_groups.append(tuple(etfList[i:i+3]))
         for etf in etfList[i:i+3]:
-            temp_l_x.append(np.load(os.path.join(train_data, f"x_{etf}.npy")))
-            temp_l_y.append(np.load(os.path.join(train_data, f"y_{etf}.npy")))
+            temp_l_x.append(np.load(os.path.join(test_data, f"x_{etf}.npy")))
+            temp_l_y.append(np.load(os.path.join(test_data, f"y_{etf}.npy")))
         x_loaded_etfs.append(temp_l_x)
         y_loaded_etfs.append(temp_l_y)
-    main(np.array(x_loaded_etfs), np.array(y_loaded_etfs), etf_groups)
+    main(np.array(x_loaded_etfs), np.array(y_loaded_etfs), etf_groups, test=True)
          

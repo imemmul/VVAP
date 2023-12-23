@@ -1,5 +1,9 @@
 import numpy as np
 import av
+from torch.utils.data import Dataset
+import pandas as pd
+import torch
+from PIL import Image
 
 def read_video_pyav(container, indices):
     '''
@@ -32,3 +36,36 @@ def sample_all_frame_indices(clip_len):
     '''
     indices = list(range(clip_len))
     return indices
+
+
+class VideoLabelDataset(Dataset):
+    def __init__(self, csv_file, transform=None):
+        self.dataframe = pd.read_csv(csv_file)
+        self.transform = transform 
+
+    def __len__(self):
+        """
+        Returns:
+            int: number of rows of the csv file (not include the header).
+        """
+        return len(self.dataframe)
+
+    def __getitem__(self, index):
+        """ get a video and its label """
+        item = {}
+        video_path = self.dataframe.iloc[index].video
+        label = self.dataframe.iloc[index].label
+        container = av.open(video_path)
+        indices = sample_all_frame_indices(clip_len=64)
+        video = read_video_pyav(container=container, indices=indices)
+        if self.transform:
+            transformed_video = []
+            for frame in video:
+                frame = Image.fromarray(frame.astype(np.uint8))
+                transformed_frame = self.transform(frame)
+                transformed_video.append(transformed_frame)
+
+            video = torch.stack(transformed_video)
+        item['pixel_values'] = torch.FloatTensor(video)
+        item['labels'] = torch.tensor(label, dtype=torch.long)
+        return item

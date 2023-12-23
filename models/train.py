@@ -1,34 +1,25 @@
 from transformers import VideoMAEImageProcessor, VideoMAEForVideoClassification, VivitConfig, VivitForVideoClassification, VivitImageProcessor
-import pytorchvideo.data
-from dataset import read_video_pyav, sample_all_frame_indices
-from transformers import TrainingArguments, Trainer
+import pytorchvideo.data as pd_video
+from dataset import read_video_pyav, sample_all_frame_indices, VideoLabelDataset
+from transformers import TrainingArguments, Trainer, get_scheduler, set_seed
+import pandas as pd
 import numpy as np
+import torch
+from torch.utils.data import Subset
+from trainer import CustomTrainer
 import evaluate
 import av
-# from pytorchvideo.transforms import (
-#     ApplyTransformToKey,
-#     Normalize,
-#     RandomShortSideScale,
-#     RemoveKey,
-#     ShortSideScale,
-#     UniformTemporalSubsample,
-# )
+from datasets import DatasetBuilder, Dataset, load_dataset, load_metric
+from torchvision import transforms
+import logging
 
-# from torchvision.transforms import (
-#     Compose,
-#     Lambda,
-#     RandomCrop,
-#     RandomHorizontalFlip,
-#     Resize,
-# )
+logging.basicConfig(level=logging.INFO)
 
-
-model_ckpt = "MCG-NJU/videomae-base" # pre-trained model from which to fine-tune
-batch_size = 8 # batch size for training and evaluation
-    # "BUY":0,
-    # "HOLD":1,
-    # "SELL":2
-def load_dataset(path):
+# "BUY":0,
+# "HOLD":1,
+# "SELL":2
+ckpt = "google/vivit-b-16x2-kinetics400"
+def load_dataset_from_txt(path):
     videos = []
     labels = []
     with open(path) as f:
@@ -44,56 +35,98 @@ def load_dataset(path):
             videos.append(video)
             labels.append(label)
     return videos, labels
-                
 
-# image_processor = VideoMAEImageProcessor.from_pretrained(model_ckpt)
-# model = VideoMAEForVideoClassification.from_pretrained(
-#     model_ckpt,
-#     label2id=label2id,
-#     id2label=id2label,
-#     ignore_mismatched_sizes=True,  # provide this in case you're planning to fine-tune an already fine-tuned checkpoint
-# )
+def create_csv(videos, labels, dataset_dir):
+    df = pd.DataFrame({
+        'video': videos,
+        'label': labels
+    })
+    df.to_csv(f"{dataset_dir}/dataset.csv")
 
-path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/labels.txt"
+normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+# Transform pipeline
+train_transform = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(degrees=10),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    transforms.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.9, 1.1)),
+    transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
+    transforms.ToTensor(),
+])
+
+val_transform = transforms.Compose([
+    transforms.ToTensor(),
+])
+
+
+train_path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/labels.txt"
+test_path = "/home/emir/Desktop/dev/datasets/ETF_Video_Test/labels.txt"
 dataset_rooth_path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/"
-video, labels = load_dataset(path)
-# print(labels)
-# label2id = {label: i for i, label in enumerate(labels)}
-# id2label = {i: label for label, i in label2id.items()}
-# # print(f"Unique classes: {list(label2id.keys())}.")
-
-# model_ckpt = "MCG-NJU/videomae-base"
-
-# image_processor = VideoMAEImageProcessor.from_pretrained(model_ckpt)
-# model = VideoMAEForVideoClassification.from_pretrained(
-#     model_ckpt,
-#     label2id=label2id,
-#     id2label=id2label,
-#     ignore_mismatched_sizes=True,  # provide this in case you're planning to fine-tune an already fine-tuned checkpoint
-# )
+train_videos, train_labels = load_dataset_from_txt(train_path)
+test_videos, test_labels = load_dataset_from_txt(test_path)
 
 
-vivit_cfg = VivitConfig(image_size=64)
-model = VivitForVideoClassification(vivit_cfg)
-for p in video:
-    container = av.open(p)
-    indices = sample_all_frame_indices(clip_len=container.streams.video[0].frames)
-    video = read_video_pyav(container=container, indices=indices)
-    print(f"video shape: {video.shape}")
 
+train_dataset = VideoLabelDataset("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/dataset.csv", transform=train_transform)
+val_test_dataset = VideoLabelDataset("/home/emir/Desktop/dev/datasets/ETF_Video_Test/dataset.csv", transform=val_transform)
+split_idx = int(len(val_test_dataset) / 2)
+val_dataset = Subset(val_test_dataset, range(0, split_idx))
+test_dataset = Subset(val_test_dataset, range(split_idx, len(val_test_dataset)))
+# print(len(val_test_dataset))
+# print(len(test_dataset))
+# print(len(val_dataset))
 
-metric = evaluate.load("accuracy")
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    return metric.compute(predictions=predictions, references=labels)
+    return load_metric("f1").compute(predictions=predictions, references=labels, average="micro")
 
 
-# training_args = TrainingArguments(output_dir="./test", evaluation_strategy="epoch")
 
-# trainer = Trainer(
-#     model=model,
-#     args=training_args,
-#     train_dataset=small_train_dataset,
-#     compute_metrics=compute_metrics,
-# )
+vivit_cfg = VivitConfig(
+    image_size=64,
+    num_frames=64,
+    patch_size=4,
+    num_labels=3,
+    hidden_size=768,        # Reduced from default (e.g., 768)
+    num_hidden_layers=12,    # Reduced from default (e.g., 12)
+    num_attention_heads=12,  # Reduced from default (e.g., 12)
+    # intermediate_size=2048, # Adjust as needed, default might be higher
+    hidden_dropout_prob=0.1,
+    attention_probs_dropout_prob=0.1
+)
+
+model = VivitForVideoClassification.from_pretrained(ckpt, config=vivit_cfg, ignore_mismatched_sizes=True)
+
+set_seed(42)
+
+total_num_samples = len(train_dataset)
+batch_size = 4
+steps_per_epoch = total_num_samples // batch_size
+
+training_args = TrainingArguments(
+    output_dir="./model_output",
+    num_train_epochs=100,
+    per_device_train_batch_size=batch_size,
+    learning_rate=1e-5,  # Reduced learning rate
+    per_device_eval_batch_size=batch_size,
+    warmup_steps=500,
+    weight_decay=0.01,
+    logging_dir='./logs',
+    evaluation_strategy="epoch",
+    save_strategy='epoch',
+    load_best_model_at_end=True,
+    save_total_limit=5,
+    max_grad_norm=1.0  # Gradient clipping
+)
+
+
+trainer = CustomTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    compute_metrics=compute_metrics,
+)
+trainer.train()
