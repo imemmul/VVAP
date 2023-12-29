@@ -1,4 +1,7 @@
 import yfinance as yf
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from scipy.spatial.distance import pdist, squareform
 import pandas as pd
 import numpy as np
 import talib as tb
@@ -194,7 +197,7 @@ for etf in etfList:
     'rsi', 'cmo', 'plus_di', 'minus_di', 'willr', 'cci', 'ultosc', 'aroonosc', 'mfi', 'mom', 'macd', 'macdfix',
     'linearreg_angle', 'linearreg_slope', 'rocp', 'roc', 'rocr', 'rocr100', 'slowk', 'fastd', 'slowd', 'aroonup',
     'aroondown', 'apo', 'macdext', 'fastk', 'ppo', 'minus_dm', 'adosc', 'fastdrsi', 'fastkrsi', 'trange', 'trix',
-    'std', 'bop', 'var', 'plus_dm', 'correl', 'ad', 'beta', 'wclprice', 'tsf', 'typprice', 'avgprice', 'medprice',
+    'std', 'bop', 'var', 'plus_dm', 'correl', 'ad', 'beta', 'wclprice', 'typprice', 'avgprice', 'medprice',
     'bbands_lowerband', 'linearreg', 'obv', 'bbands_middleband', 'tema', 'bbands_upperband', 'dema', 'midprice',
     'midpoint', 'wma', 'ema', 'ht_trendline', 'kama', 'sma', 'ma', 'adxr', 'adx', 'trima', 'linearreg_intercept', 'dx'
     ]
@@ -232,30 +235,59 @@ for etf in etfList:
     '''
     CREATING THE IMAGES
     '''
-    # nDays = len(indicatorValues[0])
-    # for idx in range(nDays-nIndicators):
-    #     # List, size=n_indicators, contains imageRows of size (n_indicators, 1)
-    #     image = []
-    #     for indicatorValue in indicatorValues:
-    #         # NumPy Array, size=(n_indicators, 1)
-    #         imageRow = indicatorValue[idx:idx+nIndicators][..., np.newaxis]
-    #         image.append(imageRow)
-    #     imageList.append(np.array(image))
-    # TODO make this like flow: 0 : idx -> image 0 -> idx : 2idx image 2 goes on 
-    nDays = len(indicatorValues[0])
-    print(f"nDays: {nDays}")
-    print(f"# of total ind: {nIndicators}")
-    for idx in range(nDays-2*nIndicators):
-        # List, size=n_indicators, contains imageRows of size (n_indicators, 1)
-        image = []
-        for indicatorValue in indicatorValues:
-            # NumPy Array, size=(n_indicators, 1)
-            # print(f"indicator value: {indicatorValue} \n")
-            imageRow = indicatorValue.iloc[idx:idx+nIndicators].values # each row is 
-            image.append(imageRow)
-        imageList.append(np.array(image))
-    print(f"imagelist_len : {len(imageList)}")
+
+    indicator_dict = {name: df['Value'] for df, name in zip(indicators, indicators_str)}
+    maxNullVal = max(df['Value'].isnull().sum() for df in indicators)
+    for name in indicators_str:
+        indicator_dict[name] = indicator_dict[name].iloc[maxNullVal:]
     
+    # below is for making it more uncorrelated
+    distance_matrix = 1 - abs(indicatorCorr)  # Convert correlation to distance
+
+    pca = PCA(n_components=2)  # n_components can be adjusted
+    reduced_data = pca.fit_transform(distance_matrix)
+
+    # Apply K-means clustering on the reduced data
+    kmeans = KMeans(n_clusters=10, random_state=0).fit(reduced_data)
+
+    # Get cluster labels for each indicator
+    clusters = kmeans.labels_
+    
+
+    from itertools import cycle, islice
+    
+    cluster_dict = {}
+    for label, indicator in zip(clusters, indicators_str):
+        cluster_dict.setdefault(label, []).append(indicator)
+
+    unique_clusters = sorted(cluster_dict.keys())
+    selected_indicators = set()
+    ordered_indicators = []
+    # round robin but bounded by 64
+    for cluster in cycle(unique_clusters):
+        if len(ordered_indicators) >= 64:
+            break
+
+        # Pick one indicator from the current cluster
+        for indicator in cluster_dict[cluster]:
+            if indicator not in selected_indicators:
+                ordered_indicators.append(indicator)
+                selected_indicators.add(indicator)
+                break
+    # print(f"len of ordered: {len(ordered_indicators)}")
+    print(f"{sorted(ordered_indicators) == sorted(indicators_str)}") # so thats okay we matched
+    nDays = len(indicator_dict[ordered_indicators[0]])
+    for idx in range(nDays - 2 * nIndicators):
+        image = []
+        for indicator_name in ordered_indicators:
+            # Retrieve the corresponding row (indicator values) for this indicator
+            indicator_values = indicator_dict[indicator_name]
+            imageRow = indicator_values.iloc[idx:idx + nIndicators].values
+            image.append(imageRow)
+        print(np.array(image).shape)
+        imageList.append(np.array(image))
+
+        
     
     '''
     CREATING THE LABELS
@@ -332,8 +364,8 @@ for etf in etfList:
     np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TrainData/y_{etf}.npy", y_train)
     np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TestData/x_{etf}.npy", x_test)
     np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TestData/y_{etf}.npy", y_test)
-# 
-    np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Date/TrainDate/{etf}.npy", train_date)
-    np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Date/TestDate/{etf}.npy", test_date)
-    np.save(f'/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Price/TrainPrice/{etf}.npy', train_price)
-    np.save(f'/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Price/TestPrice/{etf}.npy', test_price)
+
+    # np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Date/TrainDate/{etf}.npy", train_date)
+    # np.save(f"/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Date/TestDate/{etf}.npy", test_date)
+    # np.save(f'/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Price/TrainPrice/{etf}.npy', train_price)
+    # np.save(f'/home/emir/Desktop/dev/datasets/ETF/rectangle/01/Price/TestPrice/{etf}.npy', test_price)

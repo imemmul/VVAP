@@ -10,7 +10,7 @@ class CustomTrainer(Trainer):
     def create_optimizer(self):
         if self.optimizer is None:
             # Create optimizer
-            self.optimizer = AdamW(self.model.parameters(), lr=5e-5)
+            self.optimizer = AdamW(self.model.parameters(), lr=1e-5, weight_decay=0.01)
         return self.optimizer
 
     def create_scheduler(self, num_training_steps: int, optimizer=None):

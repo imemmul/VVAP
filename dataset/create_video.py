@@ -22,6 +22,9 @@ indicators_str = [
     'midpoint', 'wma', 'ema', 'ht_trendline', 'kama', 'sma', 'ma', 'adxr', 'adx', 'trima', 'linearreg_intercept', 'dx'
     ]
 
+
+
+
 def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top_etf, frame_rate=5, frames_per_video=64):
     video_info = {}
     if not os.path.exists(dataset_dir):
@@ -33,17 +36,12 @@ def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top
     etf_dir = os.path.join(group_dir, etf_name)
     os.makedirs(etf_dir, exist_ok=True)
 
-    # Calculate the number of videos that can be created
-    num_videos = len(rgb_frames) // frames_per_video
-
+    num_videos = len(rgb_frames) - (frames_per_video - 1)
+    # total_frames - (frames_per_video - 1)
     for i in range(num_videos):
-        start_idx = i * frames_per_video
+        start_idx = i
         end_idx = start_idx + frames_per_video
 
-        # Ensure the last video also has 64 frames
-        if end_idx > len(rgb_frames):
-            end_idx = len(rgb_frames)
-            start_idx = end_idx - frames_per_video
 
         video_label = rgb_labels[end_idx - 1, :].tolist()[top_etf]
         video_filename = os.path.join(etf_dir, f'output_video_{i+1}.mp4')
@@ -54,6 +52,8 @@ def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top
                 writer.append_data(frame)
 
         video_info[video_filename] = video_label
+        if end_idx == len(rgb_frames):
+            break
 
     return video_info
 
@@ -61,7 +61,7 @@ def main(x_etfs, y_etfs, etf_groups, test):
     rgb_frames = []
     rgb_labels = []
     video_info = {}
-    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_Video_Test"
+    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test"
     # dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos"
     print(etf_groups)
     for i in range(len(x_etfs)):
