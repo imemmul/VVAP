@@ -13,6 +13,7 @@ from datasets import DatasetBuilder, Dataset, load_dataset, load_metric
 from torchvision import transforms
 import logging
 import argparse
+import os
 
 logging.basicConfig(level=logging.INFO) #FIXME no logging
 #TODO other concern that needs to be done is that is it possible to give data ordered to model ?????
@@ -99,7 +100,7 @@ def create_csv(videos, labels, dataset_dir):
         'video': videos,
         'label': labels
     })
-    df.to_csv(f"{dataset_dir}/dataset.csv")
+    df.to_csv(f"{dataset_dir}dataset.csv")
 
 
 def get_datasets(args):
@@ -204,6 +205,7 @@ def main():
 
     args = parse_args()
     if args.generate_csvs:
+        print(f"Generating CSVS saving into : {args.train_dataset_root}")
         videos, labels = load_dataset_from_txt(args.train_dataset_root, args.train_dataset_root)
         create_csv(videos, labels, args.train_dataset_root)
         videos, labels = load_dataset_from_txt(args.test_dataset_root, args.test_dataset_root)
