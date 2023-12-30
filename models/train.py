@@ -15,7 +15,7 @@ import logging
 import argparse
 
 logging.basicConfig(level=logging.INFO) #FIXME no logging
-
+#TODO other concern that needs to be done is that is it possible to give data ordered to model ?????
 # "BUY":0,
 # "HOLD":1, #NOTE right now created dataset is imbalanced so should fix this shit
 # "SELL":2
@@ -76,7 +76,7 @@ def load_dataset_from_txt(path, new_prefix):
     """
     videos = []
     labels = []
-    with open(path) as f:
+    with open(os.path.join(path, 'labels.txt')) as f:
         lines = f.readlines()
         for l in lines:
             video, label = l.strip().split('\t')[0], l.strip().split('\t')[1]
