@@ -26,9 +26,9 @@ def parse_args():
                         # help="Path to the training labels file")
     # parser.add_argument("--test_path", type=str, default="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/labels.txt",
                         # help="Path to the test labels file")
-    parser.add_argument("--train_dataset_root", type=str, default="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/",
+    parser.add_argument("--train_dataset_root", type=str,
                         help="Root directory of the training dataset")
-    parser.add_argument("--test_dataset_root", type=str, default="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/",
+    parser.add_argument("--test_dataset_root", type=str,
                         help="Root directory of the test dataset")
     parser.add_argument("--output_dir", type=str, default="./model_output",
                         help="Output directory for model checkpoints and logs")
@@ -157,7 +157,7 @@ def run_train(args):
     steps_per_epoch = total_num_samples // batch_size #FIXME Training arguments doesn't work like i really wanted i about logging etc.
 
     training_args = TrainingArguments(
-        output_dir="./model_output",
+        output_dir=args.output_dir,
         num_train_epochs=args.num_training_epochs,
         per_device_train_batch_size=batch_size,
         # learning_rate=args.learning_rate, custom trainer will take this argument
