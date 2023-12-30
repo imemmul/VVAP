@@ -34,7 +34,7 @@ def sample_all_frame_indices(clip_len):
     Returns:
         indices (`List[int]`): List of all frame indices.
     '''
-    indices = list(range(clip_len))
+    indices = np.array(range(clip_len))
     return indices
 
 

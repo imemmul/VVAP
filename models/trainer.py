@@ -2,10 +2,12 @@ from transformers import Trainer, AdamW, get_linear_schedule_with_warmup, Traine
 
 
 class CustomTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, learning_rate, weight_decay, *args, **kwargs):
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         super().__init__(*args, **kwargs)
+        self.lr_scheduler = None  # init lr_scheduler
         self.optimizer = None
-        self.lr_scheduler = None  # Initialize lr_scheduler
 
     def create_optimizer(self):
         if self.optimizer is None:
