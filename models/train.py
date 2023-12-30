@@ -63,12 +63,14 @@ def parse_args():
                         help="Gradient clipping threshold")
     parser.add_argument("--test", action='store_true',
                         help="Testing")
+    parser.add_argument("--generate_csvs", action='store_true',
+                        help="csv_generator")
     
     args = parser.parse_args()
     return args
 
 
-def load_dataset_from_txt(path):
+def load_dataset_from_txt(path, new_prefix):
     """
     this function is a util i know
     """
@@ -84,6 +86,7 @@ def load_dataset_from_txt(path):
                 label = 2
             else:
                 label = 1
+            video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", new_prefix)
             videos.append(video)
             labels.append(label)
     return videos, labels
@@ -108,7 +111,6 @@ def get_datasets(args):
         # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         # transforms.RandomResizedCrop(size=(64, 64), scale=(0.8, 1.0), ratio=(0.9, 1.1)),
         # transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
-        transforms.temporal.
         transforms.ToTensor(),
     ])
 
@@ -201,6 +203,11 @@ def main():
     # create_csv(test_videos, test_labels, test_dataset_root)
 
     args = parse_args()
+    if args.generate_csvs:
+        videos, labels = load_dataset_from_txt(args.train_dataset_root, args.train_dataset_root)
+        create_csv(videos, labels, args.train_dataset_root)
+        videos, labels = load_dataset_from_txt(args.test_dataset_root, args.test_dataset_root)
+        create_csv(videos, labels, args.test_dataset_root)
     run_train(args)
     
 if __name__ == "__main__":
