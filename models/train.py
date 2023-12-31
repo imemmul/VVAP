@@ -169,9 +169,10 @@ def run_train(args):
         # weight_decay=args.weight_decay, custom trainer will take this argument
         logging_dir='./logs',
         evaluation_strategy="epoch",
-        save_strategy='iteration',
+        save_strategy='steps',
         load_best_model_at_end=True,
-        # save_total_limit=5, 
+        # save_total_limit=5,
+        save_steps=500,
         max_grad_norm=args.max_grad_norm,  # to test how gradient norm works on like temporal, #CONCLUSION it doesn't effected as much as i expected so check later
         
     )
