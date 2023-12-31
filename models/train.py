@@ -71,7 +71,7 @@ def parse_args():
     return args
 
 
-def load_dataset_from_txt(path, new_prefix):
+def load_dataset_from_txt(path, new_prefix, test):
     """
     this function is a util i know
     """
@@ -87,7 +87,10 @@ def load_dataset_from_txt(path, new_prefix):
                 label = 2
             else:
                 label = 1
-            video = video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", new_prefix)
+            if test:
+                video = video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/", new_prefix)
+            else:
+                video = video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", new_prefix)
             videos.append(video)
             labels.append(label)
     return videos, labels
