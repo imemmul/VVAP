@@ -166,14 +166,15 @@ def run_train(args):
         output_dir=args.output_dir,
         num_train_epochs=args.num_training_epochs,
         per_device_train_batch_size=batch_size,
-        # learning_rate=args.learning_rate, custom trainer will take this argument
+        learning_rate=args.learning_rate, #custom trainer will take this argument
         per_device_eval_batch_size=batch_size,
         warmup_steps=args.warmup_steps,
-        # weight_decay=args.weight_decay, custom trainer will take this argument
+        weight_decay=args.weight_decay, # custom trainer will take this argument
         logging_dir='./logs',
         evaluation_strategy="epoch",
         save_strategy='steps',
         load_best_model_at_end=True,
+        fp16=True,
         # save_total_limit=5,
         save_steps=500,
         max_grad_norm=args.max_grad_norm,  # to test how gradient norm works on like temporal, #CONCLUSION it doesn't effected as much as i expected so check later
