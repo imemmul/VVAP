@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO) #FIXME no logging
 # "BUY":0,
 # "HOLD":1, #NOTE right now created dataset is imbalanced so should fix this shit
 # "SELL":2
-
+#TODO should need resume
 def parse_args():
     parser = argparse.ArgumentParser()
     # parser.add_argument("--train_path", type=str, default="/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/labels.txt",
@@ -87,7 +87,7 @@ def load_dataset_from_txt(path, new_prefix):
                 label = 2
             else:
                 label = 1
-            video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", new_prefix)
+            video = video.replace("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/", new_prefix)
             videos.append(video)
             labels.append(label)
     return videos, labels
@@ -147,8 +147,8 @@ def create_model(args):
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
-    print(f"F1 score: {load_metric('f1').compute(predictions = predictions, references=labels, average='micro')}")
-    return load_metric("accuracy").compute(predictions=predictions, references=labels)
+    print(f"Accuracy: {load_metric('accuracy').compute(predictions = predictions, references=labels, average='micro')}")
+    return load_metric("f1").compute(predictions=predictions, references=labels, average='micro')
 
 def run_train(args):
     set_seed(42)
@@ -169,7 +169,7 @@ def run_train(args):
         # weight_decay=args.weight_decay, custom trainer will take this argument
         logging_dir='./logs',
         evaluation_strategy="epoch",
-        save_strategy='epoch',
+        save_strategy='iteration',
         load_best_model_at_end=True,
         # save_total_limit=5, 
         max_grad_norm=args.max_grad_norm,  # to test how gradient norm works on like temporal, #CONCLUSION it doesn't effected as much as i expected so check later
