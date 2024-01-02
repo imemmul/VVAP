@@ -6,7 +6,7 @@ from dataset import sample_all_frame_indices, read_video_pyav
 import pandas as pd
 np.random.seed(0)
 
-model = VivitForVideoClassification.from_pretrained("/home/emir/Desktop/dev/VVAP/models/model_output/checkpoint-17532").to("cuda")
+model = VivitForVideoClassification.from_pretrained("/home/emir/Desktop/dev/VVAP/models/model_output/checkpoint-500").to("cuda")
 image_processor = VivitImageProcessor(do_resize=False, crop_size=64, do_normalize=False, offset=False, do_center_crop=False)
 correct = 0
 df = pd.read_csv("/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/dataset.csv")
