@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import imageio.v2 as imageio
 import os
+import pandas as pd
 import cv2
 import json
 
@@ -23,89 +24,74 @@ indicators_str = [
     ]
 
 
-
-
-def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_name, group_idx, top_etf, frame_rate=5, frames_per_video=64):
+def createRGBVideo(rgb_frames, rgb_labels, dataset_dir, etf_names, group_idx, frame_rate=5, frames_per_video=64):
     video_info = {}
     if not os.path.exists(dataset_dir):
         os.makedirs(dataset_dir, exist_ok=True)
 
-
     group_dir = os.path.join(dataset_dir, f"group_{group_idx}")
     os.makedirs(group_dir, exist_ok=True)
-    etf_dir = os.path.join(group_dir, etf_name)
-    os.makedirs(etf_dir, exist_ok=True)
 
     num_videos = len(rgb_frames) - (frames_per_video - 1)
-    # total_frames - (frames_per_video - 1)
     for i in range(num_videos):
         start_idx = i
         end_idx = start_idx + frames_per_video
 
+        # Create a label vector for each video
+        video_labels = rgb_labels[end_idx - 1, :].tolist()
+        # label_name = "_".join([str(int(label)) for label in video_labels])
 
-        video_label = rgb_labels[end_idx - 1, :].tolist()[top_etf]
-        video_filename = os.path.join(etf_dir, f'output_video_{i+1}.mp4')
+        # Construct the video filename
+        video_filename = os.path.join(group_dir, f'output_video_{i+1}.mp4')
 
+        # Write the video frames to a file
         with imageio.get_writer(video_filename, fps=frame_rate, format='mp4', codec='libx264') as writer:
             for frame in rgb_frames[start_idx:end_idx]:
                 frame = (frame * 255).astype(np.uint8)
                 writer.append_data(frame)
 
-        video_info[video_filename] = video_label
+        video_info[video_filename] = video_labels
         if end_idx == len(rgb_frames):
             break
-
+    print(video_info)
     return video_info
 
+import torch
+import torch.nn.functional as F
 def main(x_etfs, y_etfs, etf_groups, test):
     rgb_frames = []
     rgb_labels = []
     video_info = {}
-    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test"
-    # dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos"
+    dataset_dir = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos" if not test else "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test"
     print(etf_groups)
+
     for i in range(len(x_etfs)):
         frame = x_etfs[i].transpose((1, 2, 3, 0))
         print(frame.shape)
 
         label = y_etfs[i].squeeze().transpose(1, 0)
-        print(label.shape)
-        rgb_labels.append(label)
+        # print(label.shape)
+        # rgb_labels.append(label)
+        label_tensor = torch.tensor(y_etfs[i].squeeze().transpose(1, 0), dtype=torch.int64)
+        # one_hot_labels = F.one_hot(label_tensor, num_classes=2)
+        # print(one_hot_labels)
+        rgb_labels.append(label_tensor)
 
-        red_replaced_by_green = np.copy(frame)
-        red_replaced_by_blue = np.copy(frame)
-        red_replaced_by_green[:, :, :, 0] = frame[:, :, :, 1]  # Red replaced by Green
-        red_replaced_by_blue[:, :, :, 0] = frame[:, :, :, 2]   # Red replaced by Blue
-        rgb_frames.append((frame, red_replaced_by_green, red_replaced_by_blue))
-    
-    for idx, ((etf1, etf2, etf3), (f, s, t), labels) in enumerate(zip(etf_groups, rgb_frames, rgb_labels)):
-        # print(idx)
-        # print(etf1, etf2, etf3)
-        # print(f.shape)
-        # print(s.shape)
-        if test:
-            info_1 = createRGBVideo(rgb_frames=np.array(f), dataset_dir=dataset_dir, etf_name=etf1, group_idx=idx, rgb_labels=np.array(labels), top_etf=0)
-            info_2 = createRGBVideo(rgb_frames=np.array(s), dataset_dir=dataset_dir, etf_name=etf2, group_idx=idx, rgb_labels=np.array(labels), top_etf=1)
-            info_3 = createRGBVideo(rgb_frames=np.array(t), dataset_dir=dataset_dir, etf_name=etf3, group_idx=idx, rgb_labels=np.array(labels), top_etf=2)
-        else:
-            info_1 = createRGBVideo(rgb_frames=np.array(f), dataset_dir=dataset_dir, etf_name=etf1, group_idx=idx, rgb_labels=np.array(labels), top_etf=0)
-            info_2 = createRGBVideo(rgb_frames=np.array(s), dataset_dir=dataset_dir, etf_name=etf2, group_idx=idx, rgb_labels=np.array(labels), top_etf=1)
-            info_3 = createRGBVideo(rgb_frames=np.array(t), dataset_dir=dataset_dir, etf_name=etf3, group_idx=idx, rgb_labels=np.array(labels), top_etf=2)
-        video_info = {**video_info, **info_1, **info_2, **info_3}
-    with open(os.path.join(dataset_dir, "labels.txt"), 'w') as file:
-        for key, value in video_info.items():
-            if value == 0.0:
-                file.write(f'{key}\tBUY\n')
-            elif value == 1.0:
-                file.write(f'{key}\tHOLD\n')
-            elif value == 2.0:
-                file.write(f'{key}\tSELL\n')
+        rgb_frames.append(frame)
+
+    for idx, (etf_group, f, labels) in enumerate(zip(etf_groups, rgb_frames, rgb_labels)):
+        info = createRGBVideo(rgb_frames=np.array(f), dataset_dir=dataset_dir, etf_names=etf_group, group_idx=idx, rgb_labels=np.array(labels))
+        video_info = {**video_info, **info}
+    video_df = pd.DataFrame(video_info.items(), columns=['file_name', 'labels'])
+
+    csv_filename = os.path.join(dataset_dir, "labels.csv")
+    video_df.to_csv(csv_filename, index=False)
                 
         
 
 if __name__ == "__main__":
-    # train_data = "/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TrainData"
-    test_data = "/home/emir/Desktop/dev/datasets/ETF/rectangle/01/TestData"
+    # train_data = "/home/emir/Desktop/dev/datasets/ETF_new/TrainData/"
+    test_data = "/home/emir/Desktop/dev/datasets/ETF_new/TestData/"
     x_loaded_etfs = []
     y_loaded_etfs = []
     etf_groups = []

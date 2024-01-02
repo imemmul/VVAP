@@ -11,9 +11,7 @@ import torch.nn as nn
 
 #     return one_hot_preds
 def logits_to_one_hot(logits):
-    # Assuming logits are in the shape [batch_size, num_channels, num_classes]
-    # and you want to apply softmax followed by converting to binary predictions
-    probabilities = torch.softmax(logits, dim=-1)
+    probabilities = torch.sigmoid(logits)
     return (probabilities > 0.5).int()  # using 0.5 as threshold
 
 
@@ -32,12 +30,12 @@ class CustomTrainer(Trainer):
         # Define the criterion with class weights
         # self.criterion = nn.CrossEntropyLoss(weight=self.class_weights.to("cuda")) #FIXME hard encoded device
         # print(f"class_weightsshape: {self.class_weights.shape}")
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.BCEWithLogitsLoss()
         
     def create_optimizer(self):
         if self.optimizer is None:
             # Create optimizer
-            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=0.001, weight_decay=0.01)
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=1e-05)
         return self.optimizer
 
     # def compute_loss(self, model, inputs, return_outputs=False):
@@ -61,17 +59,21 @@ class CustomTrainer(Trainer):
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.get('logits')
-        logits = logits.view(-1, 3, 3)
+        # print(f"logits in compute_loss sigmoid: {logits_to_one_hot(logits)}")
+        # print(f"logits in compute_loss: {logits}")
+        # print(f"labels in compute_loss: {labels}")
 
         # print(f"labels_shape: {labels.shape}")
         total_loss = 0
         for i in range(3):
-            self.criterion.weight = self.class_weights[i]
-            
-            loss = self.criterion(logits[:, i, :].float(), labels[:, i].float())
+            # print(f"logits in compute_loss sigmoid: {logits_to_one_hot(logits)}")
+            # print(f"logits in compute_loss: {logits}")
+            # print(f"labels in compute_loss: {labels}")
+            loss = self.criterion(logits[:, i].float(), labels[:, i].float())
+            # print(f"loss is of_{i}: {loss}")
             total_loss += loss
 
-        total_loss /= 3  # Averaging the loss
+        total_loss /= 3 
 
         if return_outputs:
             return total_loss, outputs

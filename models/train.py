@@ -45,7 +45,7 @@ def parse_args():
                         help="Number of training epochs")
     parser.add_argument("--patch_size", type=int, default=4,
                         help="Number of training epochs")
-    parser.add_argument("--num_labels", type=int, default=9,
+    parser.add_argument("--num_labels", type=int, default=3,
                         help="Number of training epochs")
     parser.add_argument("--per_device_train_batch_size", type=int, default=4,
                         help="Batch size for training")
@@ -125,8 +125,8 @@ def get_datasets(args):
         transforms.ToTensor(),
     ])
 
-    train_dataset = VideoLabelDataset(f"{args.train_dataset_root}dataset.csv", transform=train_transform)
-    val_dataset = VideoLabelDataset(f"{args.test_dataset_root}dataset.csv", transform=val_transform)
+    train_dataset = VideoLabelDataset(f"{args.train_dataset_root}labels.csv", transform=train_transform)
+    val_dataset = VideoLabelDataset(f"{args.test_dataset_root}labels.csv", transform=val_transform)
     # split_idx = int(len(val_test_dataset) / 2)
     # val_dataset = Subset(val_test_dataset, range(0, split_idx))
     # test_dataset = Subset(val_test_dataset, range(split_idx, len(val_test_dataset)))
@@ -151,24 +151,15 @@ def create_model(args):
     model = VivitForVideoClassification.from_pretrained(args.pretrained_ckpt, config=vivit_cfg, ignore_mismatched_sizes=True) #TODO check for how to load or keep some weights of mismatched sizes, if possible or is it valid ????? 
     return model
 
-def compute_metrics(eval_pred):
-    f1_metric = evaluate.load('f1')
-    logits, labels = eval_pred
-    print(f"logits in metrics: {logits}")
-    print(f"logits in metrics: {logits}")
-    print(f"labels in metrics: {labels}")
-    one_hot_predictions = logits_to_one_hot(torch.from_numpy(logits))
-    if isinstance(one_hot_predictions, torch.Tensor):
-        one_hot_predictions = one_hot_predictions.numpy()
+# def compute_metrics(eval_pred):
+#     f1_metric = evaluate.load('f1')
+#     logits, labels = eval_pred
+#     print(f"logits in metrics sigmoid: {torch.sigmoid(logits)}")
+#     print(f"logits in metrics: {logits}")
+#     print(f"logits in metrics: {labels}")
+#     # one_hot_predictions = logits_to_one_hot(torch.from_numpy(logits))
 
-    if isinstance(labels, torch.Tensor):
-        labels = labels.numpy()
-
-
-    flattened_predictions = one_hot_predictions.reshape(-1)
-    flattened_labels = labels.reshape(-1)
-
-    return f1_metric.compute(predictions=flattened_predictions, references=flattened_labels, average='weighted')
+#     return f1_metric.compute(predictions=logits.reshape(-1), references=labels.reshape(-1), average='weighted')
 
 def run_train(args):
     set_seed(42)
@@ -193,11 +184,11 @@ def run_train(args):
         load_best_model_at_end=True,
         fp16=True,
         # save_total_limit=5,
-        logging_steps=5000,
-        save_steps=5000,
+        logging_steps=500,
+        save_steps=500,
         max_grad_norm=args.max_grad_norm, # to test how gradient norm works on like temporal, #CONCLUSION it doesn't effected as much as i expected so check later
         # dataloader_num_workers=1
-        eval_steps=5000,   
+        eval_steps=500,   
     )
     print(f"setting class_weights: {args.class_weights}")
     trainer = CustomTrainer(
@@ -208,7 +199,7 @@ def run_train(args):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        compute_metrics=compute_metrics,
+        # compute_metrics=compute_metrics,
     )
     trainer.train()
             
@@ -243,27 +234,26 @@ def main():
         videos, labels = load_dataset_from_txt(args.test_dataset_root, args.test_dataset_root, True)
         create_csv(videos, labels, args.test_dataset_root)
     # videos, labels = load_dataset_from_txt(args.train_dataset_root, args.train_dataset_root, False)
-    labels_df = pd.read_csv(os.path.join(args.train_dataset_root, 'dataset.csv'))
+    # labels_df = pd.read_csv(os.path.join(args.train_dataset_root, 'labels.csv'))
 
-    labels = labels_df['labels'].apply(parse_labels).to_numpy()
-    print(labels)
-    print(f"labels: {labels.shape}")
-    labels_array = np.array(labels)
-    class_counts = [[0, 0, 0] for _ in range(3)]  # Three classes for each of the three channels
-    for sample in labels_array:
-        for channel in range(3):
-            class_index = np.argmax(sample[channel])  # Convert one-hot to class index
-            class_counts[channel][class_index] += 1
-    print(class_counts)
+    # labels = labels_df['labels'].apply(parse_labels).to_numpy()
+    # print(labels)
+    # print(f"labels: {labels.shape}")
+    # labels_array = np.array(labels)
+    # class_counts = [[0, 0] for _ in range(2)]  # Three classes for each of the three channels
+    # for sample in labels_array:
+    #     for channel in range(3):
+    #         class_counts[channel][class_index] += 1
+    # print(class_counts)
 
-    class_weights = []
-    for channel in range(3):
-        weights = [len(labels_array) / (3 * count) if count > 0 else 0 for count in class_counts[channel]]
-        class_weights.append(weights)
+    # class_weights = []
+    # for channel in range(3):
+    #     weights = [len(labels_array) / (3 * count) if count > 0 else 0 for count in class_counts[channel]]
+    #     class_weights.append(weights)
 
-    class_weights_tensor = [torch.tensor(weights, dtype=torch.float32).to("cuda") for weights in class_weights]
-    print(class_weights_tensor)
-    args.class_weights = class_weights_tensor
+    # # class_weights_tensor = [torch.tensor(weights, dtype=torch.float32).to("cuda") for weights in class_weights]
+    # print(class_weights_tensor)
+    # # args.class_weights = class_weights_tensor
     run_train(args)
 if __name__ == "__main__":
     main()
