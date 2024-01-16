@@ -117,15 +117,16 @@ class VideoLabelDataset(Dataset):
         
         indices = sample_all_frame_indices(clip_len=self.max_clip_len)
 
-        # temporal cropping
-        start = random.randint(0, max(0, len(indices) - self.max_clip_len))
-        end = start + self.max_clip_len
-        indices = indices[start:end]
+        # # temporal cropping
+        # start = random.randint(0, max(0, len(indices) - self.max_clip_len))
+        # end = start + self.max_clip_len
+        # indices = indices[start:end]
 
         video = read_video_pyav(container=container, indices=indices)
 
+        # Image.fromarray(video[0]).save("./taken_video.png")
         if self.transform:
             video = [self.transform(Image.fromarray(frame.astype(np.uint8))) for frame in video]
             video = torch.stack(video)
-
-        return {'pixel_values': video, 'labels': torch.tensor(label, dtype=torch.long)}
+        # print(f"get pixels: {video_path}, labels: {label}")
+        return {'pixel_values': video, 'labels': torch.tensor([label], dtype=torch.long)}

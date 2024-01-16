@@ -27,57 +27,32 @@ class CustomTrainer(Trainer):
             self.class_weights = class_weights
         else:
             self.class_weights = None
-        # Define the criterion with class weights
-        # self.criterion = nn.CrossEntropyLoss(weight=self.class_weights.to("cuda")) #FIXME hard encoded device
-        # print(f"class_weightsshape: {self.class_weights.shape}")
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.criterion = nn.BCEWithLogitsLoss() # should we use sigmoid version ???? if yes why ???
         
     def create_optimizer(self):
         if self.optimizer is None:
             # Create optimizer
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=1e-05)
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=0.003, weight_decay=0.0001) # default lr and weightdecay
         return self.optimizer
 
-    # def compute_loss(self, model, inputs, return_outputs=False):
-    #     labels = inputs.pop("labels")
-    #     outputs = model(**inputs)
-    #     logits = outputs.get('logits')
-    #     loss = self.criterion(logits, labels)
-    #     return (loss, outputs) if return_outputs else loss
-    
-    # def compute_loss(self, model, inputs, return_outputs=False):
-    #     labels = inputs.pop("labels")
-    #     # forward pass
-    #     outputs = model(**inputs)
-    #     logits = outputs.get("logits")
-    #     # compute custom loss (suppose one has 3 labels with different weights)
-    #     loss_fct = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 2.0, 3.0], device=model.device))
-    #     loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
-    #     return (loss, outputs) if return_outputs else loss
     
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.get('logits')
-        # print(f"logits in compute_loss sigmoid: {logits_to_one_hot(logits)}")
-        # print(f"logits in compute_loss: {logits}")
-        # print(f"labels in compute_loss: {labels}")
-
-        # print(f"labels_shape: {labels.shape}")
+        # print(labels.shape)
+        # print(f"labels: {labels}")
+        # print(logits.shape)
+        # print(f"logits: {logits}")
         total_loss = 0
-        for i in range(3):
-            # print(f"logits in compute_loss sigmoid: {logits_to_one_hot(logits)}")
-            # print(f"logits in compute_loss: {logits}")
-            # print(f"labels in compute_loss: {labels}")
-            loss = self.criterion(logits[:, i].float(), labels[:, i].float())
-            # print(f"loss is of_{i}: {loss}")
-            total_loss += loss
-
-        total_loss /= 3 
-
+        for chnl in range(3):
+            total_loss += self.criterion(logits.permute(1,0)[chnl], labels.squeeze().permute(1,0)[chnl].float())
+        total_loss = total_loss / 3
+        print(f"loss: {total_loss}")
         if return_outputs:
             return total_loss, outputs
         return total_loss
+    
     
     def create_scheduler(self, num_training_steps: int, optimizer=None):
         if optimizer is None:
@@ -91,6 +66,7 @@ class CustomTrainer(Trainer):
                 num_training_steps=num_training_steps
             )
         return self.lr_scheduler
+    
     #NOTE below is deactivated due to some problems
     # def get_train_dataloader(self) -> DataLoader:
     #     if self.train_dataset is None:

@@ -43,9 +43,9 @@ def parse_args():
                         help="Number of training epochs")
     parser.add_argument("--num_frames", type=int, default=64,
                         help="Number of training epochs")
-    parser.add_argument("--patch_size", type=int, default=4,
+    parser.add_argument("--patch_size", type=int, default=4, # maybe i can increase patch_size
                         help="Number of training epochs")
-    parser.add_argument("--num_labels", type=int, default=3,
+    parser.add_argument("--num_labels", type=int, default=3, # classes is like BBS, SBB, BBB 2^3 = 8 ANOTHER APPROACH this is 2 but needs play with loss function in training
                         help="Number of training epochs")
     parser.add_argument("--per_device_train_batch_size", type=int, default=4,
                         help="Batch size for training")
@@ -55,11 +55,11 @@ def parse_args():
                         help="Number of training epochs")
     parser.add_argument("--num_attention_heads", type=int, default=6,
                         help="Number of training epochs")
-    parser.add_argument("--learning_rate", type=float, default=1e-5,
+    parser.add_argument("--learning_rate", type=float, default=1e-4,
                         help="Learning rate")
     parser.add_argument("--per_device_eval_batch_size", type=int, default=4,
                         help="Batch size for evaluation")
-    parser.add_argument("--warmup_steps", type=int, default=500,
+    parser.add_argument("--warmup_steps", type=int, default=100,
                         help="Number of warmup steps for the learning rate scheduler")
     parser.add_argument("--weight_decay", type=float, default=0.01,
                         help="Weight decay for optimization")
@@ -115,9 +115,6 @@ def get_datasets(args):
     #NOTE for this task below is not approproiate.
     #NOTE more temporal info focused transforms needed
     train_transform = transforms.Compose([
-        # transforms.RandomApply([transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5))], p=0.5),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2),
-        # transforms.RandomRotation(degrees=5),
         transforms.ToTensor(),
     ])
 
@@ -151,15 +148,18 @@ def create_model(args):
     model = VivitForVideoClassification.from_pretrained(args.pretrained_ckpt, config=vivit_cfg, ignore_mismatched_sizes=True) #TODO check for how to load or keep some weights of mismatched sizes, if possible or is it valid ????? 
     return model
 
-# def compute_metrics(eval_pred):
-#     f1_metric = evaluate.load('f1')
-#     logits, labels = eval_pred
-#     print(f"logits in metrics sigmoid: {torch.sigmoid(logits)}")
-#     print(f"logits in metrics: {logits}")
-#     print(f"logits in metrics: {labels}")
-#     # one_hot_predictions = logits_to_one_hot(torch.from_numpy(logits))
-
-#     return f1_metric.compute(predictions=logits.reshape(-1), references=labels.reshape(-1), average='weighted')
+def compute_metrics(eval_pred):
+    f1_metric = evaluate.load('f1')
+    logits, labels = eval_pred
+    logits, labels = torch.tensor(logits), torch.tensor(labels)
+    average_f1 = 0
+    avg_f1 = {}
+    for c in range(3):
+        preds = logits_to_one_hot(logits.permute(1,0)[c])
+        labels_c = labels.squeeze().permute(1,0)[c]
+        average_f1 += f1_metric.compute(predictions=preds, references=labels_c, average='weighted')['f1']
+    avg_f1['f1'] = average_f1 / 3
+    return avg_f1
 
 def run_train(args):
     set_seed(42)
@@ -199,7 +199,7 @@ def run_train(args):
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        # compute_metrics=compute_metrics,
+        compute_metrics=compute_metrics,
     )
     trainer.train()
             
@@ -211,49 +211,7 @@ def parse_labels(label_str):
         return []  # or some default value like [0, 0, 0]
 
 def main():
-
-
-    # train_path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/labels.txt"
-    # test_path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/labels.txt"
-    # # dataset_rooth_path = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/"
-    # train_dataset_root = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos/"
-    # test_dataset_root = "/home/emir/Desktop/dev/datasets/ETF_RGB_Videos_Test/"
-    # train_videos, train_labels = load_dataset_from_txt(train_path)
-    # test_videos, test_labels = load_dataset_from_txt(test_path)
-
-    # create_csv(train_videos, train_labels, train_dataset_root)
-    # create_csv(test_videos, test_labels, test_dataset_root)
-    #NOTE still getting fucking all labels as 1 with class weights
     args = parse_args()
-    if args.generate_csvs:
-        print(f"Generating CSVS saving into : {args.train_dataset_root}")
-        videos, labels = load_dataset_from_txt(args.train_dataset_root, args.train_dataset_root, False)
-        create_csv(videos, labels, args.train_dataset_root)
-        # print(np.unique(labels))
-        # print(labels.sum())
-        videos, labels = load_dataset_from_txt(args.test_dataset_root, args.test_dataset_root, True)
-        create_csv(videos, labels, args.test_dataset_root)
-    # videos, labels = load_dataset_from_txt(args.train_dataset_root, args.train_dataset_root, False)
-    # labels_df = pd.read_csv(os.path.join(args.train_dataset_root, 'labels.csv'))
-
-    # labels = labels_df['labels'].apply(parse_labels).to_numpy()
-    # print(labels)
-    # print(f"labels: {labels.shape}")
-    # labels_array = np.array(labels)
-    # class_counts = [[0, 0] for _ in range(2)]  # Three classes for each of the three channels
-    # for sample in labels_array:
-    #     for channel in range(3):
-    #         class_counts[channel][class_index] += 1
-    # print(class_counts)
-
-    # class_weights = []
-    # for channel in range(3):
-    #     weights = [len(labels_array) / (3 * count) if count > 0 else 0 for count in class_counts[channel]]
-    #     class_weights.append(weights)
-
-    # # class_weights_tensor = [torch.tensor(weights, dtype=torch.float32).to("cuda") for weights in class_weights]
-    # print(class_weights_tensor)
-    # # args.class_weights = class_weights_tensor
     run_train(args)
 if __name__ == "__main__":
     main()
